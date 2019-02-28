@@ -22,11 +22,13 @@ namespace xxhr {
 
     template <typename T>
     void set_option(Session& session, T&& t) {
+        std::cout << "SetOption " << __PRETTY_FUNCTION__ << std::endl;
         session.SetOption(XXHR_FWD(t));
     }
 
     template <typename T, typename... Ts>
     void set_option(Session& session, T&& t, Ts&&... ts) {
+      std::cout << "set_option " << __PRETTY_FUNCTION__ << std::endl;
         set_option(session, XXHR_FWD(t));
         set_option(session, XXHR_FWD(ts)...);
     }
