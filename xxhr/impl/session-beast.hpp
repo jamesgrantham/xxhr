@@ -28,6 +28,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+#include <boost/asio.hpp>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/error.hpp>
@@ -107,6 +108,7 @@ namespace xxhr {
     std::shared_ptr<http::response_parser<http::string_body>> res_parser_ = std::make_shared<http::response_parser<http::string_body>>();
 
     bool is_tls_stream() {
+      // std::cout << "i guess we will check if this is a tls stream" << std::endl;
       return std::holds_alternative<ssl::stream<tcp::socket>>(stream_);
     }
 
@@ -120,7 +122,8 @@ namespace xxhr {
 
     void fail(boost::system::error_code ec, xxhr::ErrorCode xxhr_ec) { 
       //TODO: if (trace)
-      std::cerr << ec << ": " << ec.message() << " distilled into : " << uint32_t(xxhr_ec) << "\n";
+
+      std::cerr << "fail -- " << ec << " : " << ec.message() << " : distilled into : " << xxhr_ec << "\n";
 
       on_response(xxhr::Response(
         0, // 0 for errors which are on the layer belows http, like XmlHttpRequest.
@@ -150,6 +153,7 @@ namespace xxhr {
       }
 
       // Look up the domain name
+      std::cout << "lets try to resolve!" << std::endl;
       resolver_.async_resolve(
           url_parts_.host.data(),
           url_parts_.port.data(),
@@ -172,6 +176,7 @@ namespace xxhr {
           socket = &plain_stream();
         }
 
+        std::cout << "lets try to async connect!" << std::endl;
         boost::asio::async_connect(
             *socket,
             results.begin(),
@@ -189,6 +194,7 @@ namespace xxhr {
         if (is_tls_stream()) {
           // Perform the SSL handshake
           auto& stream = tls_stream();
+          std::cout << "lets try a async handshake!" << std::endl;
           stream.async_handshake(
               ssl::stream_base::client,
               std::bind(
@@ -196,6 +202,7 @@ namespace xxhr {
                   shared_from_this(),
                   std::placeholders::_1));
         } else {
+          std::cout << "lets assume plain HTTP" << std::endl;
           // Plain HTTP
           // consider handshake was performed.
           on_stream_ready(ec);
@@ -203,8 +210,11 @@ namespace xxhr {
     }
 
     void on_stream_ready(boost::system::error_code ec) {
-        if(ec)
+      std::cout << "is the stream ready?" << std::endl;
+        if(ec) {
+          std::cout << "guess not and it failed! SSL" << std::endl;
           return fail(ec, ErrorCode::SSL_CONNECT_ERROR);
+        }
 
         // Send the HTTP request to the remote host
         std::visit([this](auto& stream) {
@@ -223,9 +233,10 @@ namespace xxhr {
     void on_write( boost::system::error_code ec, std::size_t bytes_transferred) {
         boost::ignore_unused(bytes_transferred);
 
-        if(ec)
+        if(ec) {
+          std::cout << "NETWORK SEND FAILURE" << std::endl;
           return fail(ec, ErrorCode::NETWORK_SEND_FAILURE);
-        
+    }
         // Receive the HTTP response
         std::visit([this](auto& stream) {
           if constexpr (std::is_same_v<std::monostate,std::decay_t<decltype(stream)>>) return;
@@ -246,9 +257,10 @@ namespace xxhr {
 
         timeouter.cancel();
 
-        if(ec)
+        if(ec) {
+          std::cout << "failed on_read NETWORK_RECEIVE_ERROR" << std::endl;
           return fail(ec, ErrorCode::NETWORK_RECEIVE_ERROR);
-
+        }
         http::response<http::string_body> res = res_parser_->get();
 
         // Write the message to standard out
@@ -336,7 +348,10 @@ namespace xxhr {
 
   void Session::Impl::SetUrl(const Url& url) {
     url_ = url; 
+    std::cout << "url: " << url << std::endl;
     url_parts_ = util::parse_url(url); 
+    std::cout << "url host: " << url_parts_.host << " port: " << url_parts_.port << std::endl;
+
   }
   void Session::Impl::SetParameters(Parameters&& parameters) {
     parameters_ = std::move(parameters);
@@ -478,8 +493,10 @@ namespace xxhr {
     req_.prepare_payload(); // Compute Content-Length and related headers
 
     if (url_parts_.https()) {
+      std::cout << "https" << std::endl;
       stream_.emplace<ssl::stream<tcp::socket>>(ioc, ctx);
     } else {
+      std::cout << "reg http" << std::endl;
       stream_.emplace<tcp::socket>(ioc);
     }
 

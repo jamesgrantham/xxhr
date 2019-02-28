@@ -261,12 +261,15 @@ namespace xxhr {
     using namespace std::placeholders;
 
     if (auth_) {
+      std::cout << "opening with auth" << std::endl;
       xhr.call<val>("open", method, url_, true, auth_->username(), auth_->password() );
     } else {
+      std::cout << "opening with no auth" << std::endl;
       xhr.call<val>("open", method, url_, true);
     }
     
     for (auto item = headers.cbegin(); item != headers.cend(); ++item) {
+      std::cout << "setting request headers" << std::endl;
       xhr.call<val>("setRequestHeader", item->first, item->second);
     }
 
